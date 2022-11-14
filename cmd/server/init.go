@@ -1,28 +1,24 @@
-package di
+package main
 
 import (
 	"context"
 	"github.com/go-redis/redis/v9"
+	"github.com/gorilla/mux"
+	"github.com/valyala/fasthttp"
+	"github.com/valyala/fasthttp/fasthttpadaptor"
 	"go-template/config"
+	"go-template/internal/handlers"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 	"math/rand"
+	"net/http"
 	"time"
 )
 
-type DependencyContainer struct {
-	Db          *gorm.DB
-	RedisClient *redis.Client
-	Config      config.Config
-}
-
-var instance DependencyContainer
-
-func InitDC() {
+func init() {
 	config.InitConfig()
-	cfg := config.GetInstance()
-	instance.Config = *cfg
+	cfg = config.GetInstance()
 
 	rand.Seed(time.Now().UnixNano())
 
@@ -31,7 +27,7 @@ func InitDC() {
 		dbLogger = gormlogger.Default.LogMode(gormlogger.Info)
 	}
 	dsn := "host=" + cfg.DB.Host + " user=" + cfg.DB.User + " dbname=" + cfg.DB.Dbname + " sslmode=disable password=" + cfg.DB.Password + " port=" + cfg.DB.Port
-	db, err := gorm.Open(postgres.New(postgres.Config{
+	db, err = gorm.Open(postgres.New(postgres.Config{
 		DSN: dsn,
 	}), &gorm.Config{
 		Logger:                                   dbLogger,
@@ -39,16 +35,11 @@ func InitDC() {
 		SkipDefaultTransaction:                   true,
 	})
 	if err != nil {
-
+		// log
 	}
 
-	sqlDB, err := db.DB()
-	sqlDB.SetMaxIdleConns(cfg.DB.MaxOpenIdleConns)
-	sqlDB.SetMaxOpenConns(cfg.DB.MaxOpenConns)
-	instance.Db = db
-
 	// Redis
-	redisClient := redis.NewClient(&redis.Options{
+	redisClient = redis.NewClient(&redis.Options{
 		Addr:     cfg.Redis.Host + ":" + cfg.Redis.Port,
 		Password: cfg.Redis.Password,
 		DB:       cfg.Redis.Db,
@@ -56,20 +47,21 @@ func InitDC() {
 
 	pingResult, err := redisClient.Ping(context.Background()).Result()
 	if err != nil {
-
+		// log error
 	}
 	if pingResult != "PONG" {
-
+		// log
 	}
-	instance.RedisClient = redisClient
 
-	instance.Config = *cfg
-}
+	r := mux.NewRouter()
+	//TODO init hadlers
+	handlers.NewAppHandler(r)
+	http.Handle("/", r)
 
-func GetDependencyContainer() DependencyContainer {
-	return instance
-}
+	httpServer = fasthttp.Server{
+		Handler:      fasthttpadaptor.NewFastHTTPHandler(http.DefaultServeMux),
+		IdleTimeout:  time.Duration(cfg.HttpIdleTimeout) * time.Second,
+		WriteTimeout: time.Duration(cfg.WorkersTimeout) * time.Second,
+	}
 
-func (dc *DependencyContainer) Destroy() {
-	dc.RedisClient.Close()
 }

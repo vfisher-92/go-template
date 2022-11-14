@@ -3,40 +3,25 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/gorilla/mux"
+	"github.com/go-redis/redis/v9"
 	"github.com/valyala/fasthttp"
-	"github.com/valyala/fasthttp/fasthttpadaptor"
-	"go-template/di"
-	"go-template/internal/handlers"
+	"go-template/config"
 	"golang.org/x/sync/errgroup"
-	"net/http"
+	"gorm.io/gorm"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 )
 
 var (
-	dc di.DependencyContainer
+	cfg         *config.Config
+	httpServer  fasthttp.Server
+	redisClient *redis.Client
+	db          *gorm.DB
+	err         error
 )
 
-func init() {
-	di.InitDC()
-	dc = di.GetDependencyContainer()
-}
-
 func main() {
-
-	r := mux.NewRouter()
-
-	handlers.NewAppHandler(r)
-	http.Handle("/", r)
-
-	httpServer := fasthttp.Server{
-		Handler:      fasthttpadaptor.NewFastHTTPHandler(http.DefaultServeMux),
-		IdleTimeout:  time.Duration(dc.Config.HttpIdleTimeout) * time.Second,
-		WriteTimeout: time.Duration(dc.Config.WorkersTimeout) * time.Second,
-	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	runGroup, gCtx := errgroup.WithContext(ctx)
@@ -49,7 +34,7 @@ func main() {
 	}()
 
 	runGroup.Go(func() error {
-		return httpServer.ListenAndServe(dc.Config.Address)
+		return httpServer.ListenAndServe(cfg.Address)
 	})
 	runGroup.Go(func() error {
 		<-gCtx.Done()
@@ -60,5 +45,6 @@ func main() {
 		fmt.Printf("Exit reason: %s \n", err)
 	}
 
-	defer dc.Destroy()
+	defer redisClient.Close()
+
 }
