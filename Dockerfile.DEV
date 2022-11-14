@@ -1,0 +1,15 @@
+FROM golang
+
+ARG VERSION=dev
+
+RUN apk update && apk add --no-cache git protoc
+
+WORKDIR /build
+
+
+RUN go install github.com/githubnemo/CompileDaemon@latest
+RUN export PATH="$PATH:$(go env GOPATH)/bin"
+
+EXPOSE 9000
+
+CMD cd /build && go mod download && CompileDaemon --build="go build -o go_template -buildvcs=false ./cmd/server" --command=./go_template

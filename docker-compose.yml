@@ -1,0 +1,15 @@
+go_template-postgres:
+  image: postgres:latest
+  container_name: go_template-postgres
+  environment:
+    - POSTGRES_USER=go_template
+    - POSTGRES_PASSWORD=go_template_password
+    - POSTGRES_DB=go_template
+  ports:
+    - "5432:5432"
+
+go_template-redis:
+  image: redis:latest
+  container_name: go_template-redis
+  ports:
+    - "6379:6379"
